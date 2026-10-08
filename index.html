@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オセアニア神話・伝承図鑑 - Oceania Mythology App</title>
+    <style>
+        :root {
+            --bg-color: #fdfaf2;
+            --card-bg: #fffbf0;
+            --accent-yellow: #d4a373;
+            --dark-yellow: #a37233;
+            --text-color: #4a3b32;
+            --border-color: #e6d5b8;
+            --god-color: #b5838d;
+            --monster-color: #6b705c;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: "Georgia", "Yu Mincho", "游明朝", serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: linear-gradient(180deg, #faf0ca 0%, var(--bg-color) 100%);
+            padding: 15px 20px;
+            text-align: center;
+            border-bottom: 2px solid var(--border-color);
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--dark-yellow);
+            letter-spacing: 2px;
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: #7f6a55;
+            margin-top: 4px;
+        }
+
+        #app-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        #app-container:active {
+            cursor: grabbing;
+        }
+
+        /* SVG古地図キャンバス */
+        #map-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* 古地図スタイル定義 */
+        .map-bg { fill: #f5eedc; }
+        .map-grid { stroke: #e3d3b5; stroke-width: 0.8; stroke-dasharray: 4,4; }
+        .ocean-texture { fill: #ece1c8; opacity: 0.3; }
+        .landmass { fill: #eadabe; stroke: #cbb28d; stroke-width: 2; filter: drop-shadow(2px 3px 6px rgba(163,114,51,0.15)); }
+        .coastline { fill: none; stroke: #bfa175; stroke-width: 1; stroke-dasharray: 2,2; }
+        .compass-ring { fill: none; stroke: #a37233; stroke-width: 1.5; }
+        .map-label { font-family: 'Georgia', serif; fill: #8c6d46; font-size: 16px; font-weight: bold; letter-spacing: 3px; }
+
+        /* インタラクティブマーカー */
+        .pin {
+            cursor: pointer;
+            transition: transform 0.2s ease, filter 0.2s ease;
+        }
+
+        .pin:hover {
+            transform: scale(1.25);
+            filter: drop-shadow(0 0 8px rgba(212, 163, 115, 0.8));
+        }
+
+        .pin-god circle { fill: #d97706; stroke: #fffbf0; stroke-width: 2; }
+        .pin-monster circle { fill: #4b5563; stroke: #fffbf0; stroke-width: 2; }
+
+        /* サイドパネル (詳細表示) */
+        #detail-panel {
+            position: absolute;
+            top: 0;
+            right: -420px;
+            width: 400px;
+            height: 100%;
+            background-color: var(--card-bg);
+            border-left: 2px solid var(--border-color);
+            box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+            transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        #detail-panel.active {
+            right: 0;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            color: var(--dark-yellow);
+            cursor: pointer;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 12px;
+            width: fit-content;
+        }
+
+        .badge-god { background-color: var(--dark-yellow); }
+        .badge-monster { background-color: #6b705c; }
+
+        .detail-title {
+            font-size: 1.6rem;
+            color: var(--text-color);
+            margin-bottom: 5px;
+            border-bottom: 2px dashed var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .detail-region {
+            font-size: 0.9rem;
+            color: #8c7a6b;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .detail-section {
+            margin-bottom: 18px;
+        }
+
+        .detail-section h4 {
+            font-size: 0.95rem;
+            color: var(--dark-yellow);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .detail-section p {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #5c4d43;
+        }
+
+        /* フィルター & コントロールUI */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(255, 251, 240, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .filter-btn {
+            background: #f0e6d2;
+            border: 1px solid var(--accent-yellow);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            color: var(--text-color);
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background: var(--dark-yellow);
+            color: #fff;
+        }
+
+        /* 参考文献モーダル */
+        #ref-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--dark-yellow);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        #ref-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.4);
+            z-index: 30;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 30px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            position: relative;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 15px;
+            color: var(--dark-yellow);
+        }
+
+        .modal-content ul {
+            margin-left: 20px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>オセアニア神話・伝承マップ</h1>
+        <p>ドラッグで地図を移動し、各ピンを選択して詳細を閲覧できます</p>
+    </header>
+
+    <button id="ref-btn" onclick="toggleModal(true)">参考文献</button>
+
+    <div id="app-container">
+        <!-- エジプト古地図風 SVG Map -->
+        <svg id="map-canvas" width="2000" height="1500" viewBox="0 0 2000 1500">
+            <!-- 羊皮紙グラデーション定義 -->
+            <defs>
+                <radialGradient id="oceanGrad" cx="50%" cy="50%" r="70%">
+                    <stop offset="0%" stop-color="#fdfaf2" />
+                    <stop offset="100%" stop-color="#ebdcb9" />
+                </radialGradient>
+            </defs>
+
+            <!-- 背景（海洋） -->
+            <rect width="2000" height="1500" fill="url(#oceanGrad)" />
+
+            <!-- 緯度経度格子線 (古地図風) -->
+            <g class="map-grid">
+                <line x1="0" y1="300" x2="2000" y2="300" />
+                <line x1="0" y1="750" x2="2000" y2="750" />
+                <line x1="0" y1="1200" x2="2000" y2="1200" />
+                <line x1="500" y1="0" x2="500" y2="1500" />
+                <line x1="1000" y1="0" x2="1000" y2="1500" />
+                <line x1="1500" y1="0" x2="1500" y2="1500" />
+            </g>
+
+            <!-- オーストラリア大陸 -->
+            <path class="landmass" d="M 250 650 Q 350 500 500 550 T 700 700 T 750 950 T 600 1150 T 300 1100 T 200 850 Z" />
+            <path class="coastline" d="M 240 640 Q 350 490 510 540 T 710 690 T 760 960 T 600 1160 T 290 1110 T 190 850 Z" />
+            <text x="430" y="850" class="map-label">AUSTRALIA</text>
+
+            <!-- ニュージーランド（北島・南島） -->
+            <g transform="translate(1300, 950)">
+                <!-- 北島 -->
+                <path class="landmass" d="M 120 50 Q 160 20 180 70 T 130 150 T 80 100 Z" />
+                <!-- 南島 -->
+                <path class="landmass" d="M 70 160 Q 120 180 100 280 T 30 320 T 20 220 Z" />
+                <text x="50" y="360" class="map-label">AOTEAROA (NZ)</text>
+            </g>
+
+            <!-- ポリネシア・ミクロネシア・メラネシア諸島（模式的造形） -->
+            <!-- メラネシア (ニューギニア等) -->
+            <path class="landmass" d="M 650 450 Q 800 420 900 500 T 800 580 T 650 500 Z" />
+            <text x="700" y="520" class="map-label" font-size="12">MELANESIA</text>
+
+            <!-- ミクロネシア -->
+            <path class="landmass" d="M 850 250 Q 950 230 1050 270 T 950 320 Z" />
+            <text x="880" y="290" class="map-label" font-size="12">MICRONESIA</text>
+
+            <!-- ポリネシア（ハワイ、サモア等） -->
+            <path class="landmass" d="M 1450 200 Q 1550 180 1600 230 T 1500 280 Z" /> <!-- ハワイ風 -->
+            <text x="1460" y="240" class="map-label" font-size="12">HAWAII</text>
+
+            <path class="landmass" d="M 1250 600 Q 1350 580 1400 630 T 1300 680 Z" /> <!-- サモア・タヒチ風 -->
+            <text x="1270" y="640" class="map-label" font-size="12">POLYNESIA</text>
+
+            <!-- 古地図風 羅針盤 (コンパスローズ) -->
+            <g transform="translate(1650, 1150)">
+                <circle cx="0" cy="0" r="80" class="compass-ring" />
+                <circle cx="0" cy="0" r="75" class="compass-ring" stroke-dasharray="2,4" />
+                <path d="M 0 -90 L 15 0 L 0 90 L -15 0 Z" fill="#a37233" />
+                <path d="M -90 0 L 0 15 L 90 0 L 0 -15 Z" fill="#a37233" />
+                <text x="-6" y="-98" font-family="Georgia" font-weight="bold" fill="#a37233">N</text>
+            </g>
+
+            <!-- マーカー挿入用グループ -->
+            <g id="pins-layer"></g>
+        </svg>
+    </div>
+
+    <!-- コントロールUI -->
+    <div class="controls">
+        <button class="filter-btn active" onclick="filterPins('all')">すべて表示</button>
+        <button class="filter-btn" onclick="filterPins('god')">神様のみ</button>
+        <button class="filter-btn" onclick="filterPins('monster')">怪物・精霊のみ</button>
+    </div>
+
+    <!-- 詳細サイドパネル -->
+    <div id="detail-panel">
+        <button class="close-btn" onclick="closePanel()">&times;</button>
+        <span id="detail-type" class="badge">神様</span>
+        <h2 id="detail-title" class="detail-title">タネ・マフタ</h2>
+        <div id="detail-region" class="detail-region">ニュージーランド全域（森林）</div>
+
+        <div class="detail-section">
+            <h4>概要・伝承内容</h4>
+            <p id="detail-content">森林と鳥の神。父なる天と母なる大地を引き離し、世界に光をもたらした。</p>
+        </div>
+
+        <div class="detail-section">
+            <h4>誕生経緯</h4>
+            <p id="detail-origin">天神ランギヌイと地母神パパトゥアヌクの間に生まれた。</p>
+        </div>
+    </div>
+
+    <!-- 参考文献モーダル -->
+    <div id="ref-modal">
+        <div class="modal-content">
+            <h3>参考文献・情報元</h3>
+            <h4>【書籍】</h4>
+            <ul>
+                <li>Antony Alpers, <i>Maori Myths and Tribal Legends</i>, 1964年</li>
+                <li>Martha Warren Beckwith, <i>Hawaiian Mythology</i>, 1940年</li>
+                <li>A. W. Reed, <i>Aboriginal Myths, Legends and Fables</i>, 1999年</li>
+                <li>Charles Mountford, <i>The Dreamtime: Australian Aboriginal Myths</i>, 1965年</li>
+            </ul>
+            <h4 style="margin-top: 15px;">【ウェブサイト】</h4>
+            <ul>
+                <li><a href="https://teara.govt.nz/en/maori-creation-traditions" target="_blank">Te Ara - Māori creation traditions and Gods</a> (2005)</li>
+                <li><a href="https://australian.museum/learn/cultures/indigenous-australians/dreaming-and-creation/" target="_blank">Australian Museum - Indigenous Australian Dreaming</a> (2021)</li>
+                <li><a href="https://aiatsis.gov.au/explore/articles/dreaming" target="_blank">AIATSIS - The Dreaming and Indigenous Worldviews</a> (2020)</li>
+            </ul>
+            <button onclick="toggleModal(false)" style="margin-top: 20px; padding: 6px 16px; cursor: pointer;">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        // データベース（全60体）
+        const mythologyData = [
+            // 1. ニュージーランド（神様）
+            { type: 'god', name: 'タネ・マフタ (Tāne-mahuta)', region: 'ニュージーランド全域（森林）', content: '森林と鳥の神。父なる天と母なる大地を引き離し、世界に光をもたらした。', origin: '天神ランギヌイと地母神パパトゥアヌクの間に生まれた。', x: 1440, y: 1040 },
+            { type: 'god', name: 'タフィリマテア (Tāwhirimātea)', region: 'ニュージーランド全域（大気・空）', content: '風と嵐の神。両親の別離に怒り、兄弟である他の神々に激しい嵐を浴びせた。', origin: 'ランギヌイとパパトゥアヌクの間に生まれた。', x: 1420, y: 1000 },
+            { type: 'god', name: 'タンガロア (Tangaroa)', region: 'ニュージーランド全域（海洋）', content: '海洋と魚類・水生生物を司る神。', origin: 'ランギヌイとパパトゥアヌクの間に生まれた。', x: 1500, y: 1080 },
+            { type: 'god', name: 'トゥーマタウエンガ (Tūmatauenga)', region: 'ニュージーランド全域', content: '戦いと人間の営みを司る神。兄弟神たちを従え、食べ物として利用することを教えた。', origin: 'ランギヌイとパパトゥアヌクの間に生まれた。', x: 1460, y: 1020 },
+            { type: 'god', name: 'ロンゴマタネ (Rongomatāne)', region: 'ニュージーランド全域', content: '栽培作物（特にサツマイモ）と平和を司る神。', origin: 'ランギヌイとパパトゥアヌクの間に生まれた。', x: 1430, y: 1060 },
+            { type: 'god', name: 'ハウミア・チチケ (Haumia-tiketike)', region: 'ニュージーランド全域', content: '野生植物（シダの根など）と自生する食料の神。', origin: 'ランギヌイとパパトゥアヌクの間に生まれた。', x: 1410, y: 1080 },
+            { type: 'god', name: 'ヒネ・ヌイ・テ・ポ (Hine-nui-te-pō)', region: '冥界（ポ）', content: '冥界を統括する死の女神。', origin: '最初の人間の女性ヒネ・チタマとして生まれたが、真実を知り絶望して冥界へ下り死の女神となった。', x: 1350, y: 1250 },
+            { type: 'god', name: 'マウイ (Māui)', region: 'ニュージーランド（北島・南島）', content: '巨大な魚として北島を釣り上げ、太陽を縛り上げて昼を長くした半神の英雄。', origin: '人間の母タランガと神の父タラヒの間に未熟児として生まれ、海の精霊に助けられて育った。', x: 1390, y: 1120 },
+            { type: 'god', name: 'ルアウモコ (Rūaumoko)', region: 'ニュージーランド全域（地底）', content: '地震と火山活動を司る神。', origin: '天地の別離の際、母パパトゥアヌクの胎内（地底）に取り残された末子。', x: 1440, y: 1100 },
+            { type: 'god', name: 'レフア (Rehua)', region: '最上層の天（第10の天）', content: '星々（シリウス）と知恵、癒やしを司る最高位の神。', origin: '天空の世界が形作られた初期に創出された。', x: 1400, y: 920 },
+
+            // ニュージーランド（怪物・精霊）
+            { type: 'monster', name: 'タニファ (Taniwha)', region: '川、湖、洞窟、海洋', content: '水辺に生息する巨大なトカゲや蛇のような怪物。守護者とされることもあるが、禁忌を破る者を水中に引き込む。', origin: '海の神タンガロアの血脈から生じ、各地の水脈を守るために配置された。', x: 1470, y: 1050 },
+            { type: 'monster', name: 'ポウアカイ (Pouakai)', region: '南島（高山地帯）', content: '人間を空中から急襲して持ち去る巨大な肉食の怪鳥。', origin: '山岳地帯の巨鳥が伝承の中で畏怖の対象として怪異化した。', x: 1360, y: 1200 },
+            { type: 'monster', name: 'マエロ (Maero)', region: '南島の深い森林', content: '全身が粗い毛で覆われ、長い髪と鋭い爪を持つ野蛮な巨人。人を捕らえて食べるとされる。', origin: '太古の昔に森へ迷い込み、野生化・怪異化した人々の生き残り。', x: 1330, y: 1220 },
+            { type: 'monster', name: 'ポノトゥリ (Ponaturi)', region: '深海および夜の沿岸', content: '日光を異常に恐れ、夜になると海から上がって人間を襲う海妖の一族。', origin: '太陽の光線が届かない深海の闇から発生した。', x: 1520, y: 1150 },
+            { type: 'monster', name: 'ケーフア (Kēhua)', region: '墓地や人通りのない廃墟', content: '人間に取り憑いて狂気や病をもたらす邪悪な霊体。', origin: '適切な葬送儀礼を受けられずに落命した者の怨念。', x: 1450, y: 1010 },
+            { type: 'monster', name: 'ティワイワカの悪霊 (Tīwaiwaka Spirit)', region: '深い密林', content: '幻影の鳥の姿をして旅人を惑わせ、底なし沼や崖へと誘導して命を奪う。', origin: '森の神々の聖域を汚した人間を排斥するために生じた。', x: 1380, y: 1150 },
+            { type: 'monster', name: 'タホラ・ヌイの巨獣 (Tahora Nui)', region: '沖合の深海', content: '航海中のカヌーを一息に飲み込む深海の怪物。', origin: '禁忌の海域へ侵入した者たちを罰するためタンガロアが放った。', x: 1540, y: 1020 },
+            { type: 'monster', name: 'ヌクマイティ (Nukumaiti)', region: '北島中央部の地熱地帯', content: '沸騰する泥や温泉から現れ、通りかかる者を中に引きずり込む熱の精霊。', origin: '火山の神々の怒りが地表の噴出物と結合して実体化した。', x: 1435, y: 1030 },
+            { type: 'monster', name: 'ティホラ (Tihora)', region: '沿岸の断崖絶壁', content: '突風を起こして旅人を崖から落とし、命を奪う空の魔物。', origin: '風の神タフィリマテアが投げつけた荒ぶる風の残骸から生じた。', x: 1380, y: 1070 },
+            { type: 'monster', name: 'ウレ・タホラ (Ure Tahora)', region: '湿地帯や浅瀬', content: '底なしの泥の中に身を潜め、足を捕らえて溺れさせる怪異。', origin: '湿地の濁った水から生じた邪気が実体化した。', x: 1420, y: 1040 },
+
+            // 2. 太平洋の島々（神様）
+            { type: 'god', name: 'ペレ (Pele)', region: 'ハワイ諸島（ポリネシア）', content: '火山、火、稲妻を司る女神。', origin: 'タヒチから渡り、キラウエア火山に居を構えた。', x: 1520, y: 220 },
+            { type: 'god', name: 'ロノ (Lono)', region: 'ハワイ諸島', content: '農耕、雨、収穫、平和を司る神。', origin: '天空から舞い降り、人々に農耕と平和の儀式を授けた。', x: 1500, y: 200 },
+            { type: 'god', name: 'クー (Kū)', region: 'ハワイ諸島', content: '戦いと権力を司る神。', origin: '始原の混沌から生じた。', x: 1540, y: 240 },
+            { type: 'god', name: 'カネ (Kāne)', region: 'ハワイ諸島', content: '淡水、生命、日光を司る創世の最高神。', origin: '闇の中から最初に目覚めた。', x: 1480, y: 220 },
+            { type: 'god', name: 'タガロア / タアロア (Tagaloa)', region: 'サモア、タヒチなどポリネシア全域', content: '自らの宇宙の殻から天と地を創り出した最高創世神。', origin: '無の空間の中に一粒の存在として誕生した。', x: 1320, y: 640 },
+            { type: 'god', name: 'キャット (Qat)', region: 'ヴァヌアツ（メラネシア）', content: '木や粘土から人間を創り、昼と夜をもたらした英雄神。', origin: '母体からではなく聖なる石から自然発生的に誕生した。', x: 920, y: 620 },
+            { type: 'god', name: 'ヤロファト (Yalafath)', region: 'ヤップ島（ミクロネシア）', content: '世界と人間を創造した最高神。', origin: '世界が存在する前より天空に鎮座していた。', x: 880, y: 300 },
+            { type: 'god', name: 'アレオープ・エナップ (Areop-Enap)', region: 'ナウル（ミクロネシア）', content: '始原の二枚貝を開いて天と地を創り出したクモの姿の創世神。', origin: '暗闇の始原の世界に唯一存在していた。', x: 1020, y: 420 },
+            { type: 'god', name: 'デゲイ (Degei)', region: 'フィジー（メラネシア）', content: '大蛇の姿をした最高神。大地を創り、死後の魂を審判する。', origin: '始原の海に浮かぶ巨鳥の卵から孵化した。', x: 1100, y: 680 },
+            { type: 'god', name: 'シナ (Sina)', region: 'サモア、トンガなど', content: '月とココナッツの起源にまつわる美と恵みの女神。', origin: '光と水が交わる場所から生まれた。', x: 1280, y: 660 },
+
+            // 太平洋の島々（怪物・精霊）
+            { type: 'monster', name: 'モオ (Moʻo)', region: 'ハワイ諸島', content: '滝や池に潜む巨大なトカゲの怪物。変身能力を持つ。', origin: '水辺を守護する強力な精霊が怪物化した。', x: 1530, y: 200 },
+            { type: 'monster', name: 'ナイト・マーチャーズ (Night Marchers)', region: 'ハワイ諸島', content: '夜間に松明を掲げて行進する古代戦士の亡霊軍団。', origin: '死後も聖なる王を守る誓いを果たすため地縛霊化した。', x: 1490, y: 240 },
+            { type: 'monster', name: 'カマプアア (Kamapuaʻa)', region: 'ハワイ諸島', content: '豚の姿をした半神半獣。作物を荒らし暴風雨を起こす。', origin: '人間の母親から豚の姿で生まれた。', x: 1510, y: 250 },
+            { type: 'monster', name: 'アドラ (Adaro)', region: 'ソロモン諸島（メラネシア）', content: '飛魚を頭から放って人間を殺傷する凶暴な人魚風の海の悪霊。', origin: '海の毒素と人間の悪意が結合して生じた。', x: 880, y: 550 },
+            { type: 'monster', name: 'ミル (Milu)', region: 'ポリネシア各地（冥界）', content: '冥界の入口で死者の魂を捕らえて煮て食べる鬼婆。', origin: '冥界の闇の中で生じた畏怖が具象化した。', x: 1350, y: 720 },
+            { type: 'monster', name: 'フェドゥン (Phedung)', region: 'ニューギニア島（メラネシア）', content: '鋭い爪を持ち、人間をさらう森の喰人鬼。', origin: '禁忌を破った人間が怨念によって変化した。', x: 750, y: 520 },
+            { type: 'monster', name: 'ルク (Luku)', region: 'ミクロネシア（チューク諸島など）', content: '暴風雨とともに現れ、家屋を壊す空飛ぶ怪物。', origin: '海上の竜巻への恐怖が実体化した。', x: 920, y: 270 },
+            { type: 'monster', name: 'タラカ (Taraka)', region: 'フィジー', content: '珊瑚礁の隙間に潜み、船を引きずり込む多足の海洋怪物。', origin: '乱獲を行う者への天罰としてデゲイ神が生み出した。', x: 1120, y: 700 },
+            { type: 'monster', name: 'カウハラ (Kauhala)', region: 'マーシャル諸島', content: '漂流者を幻影で誘惑し、深海へ引き込む悪霊。', origin: '海上で遭難した漂流者の無念の魂が集積したもの。', x: 1100, y: 320 },
+            { type: 'monster', name: 'ウロ (Oro spirit aspect)', region: 'タヒチ', content: '戦争と殺戮を好む不吉な魔神。', origin: '人間同士の争いの念から生まれた。', x: 1380, y: 650 },
+
+            // 3. オーストラリア大陸（神様）
+            { type: 'god', name: 'バイアメ (Baiame)', region: 'ニューサウスウェールズ州', content: '大地や川、文化を創造した天空の父。', origin: 'ドリーミングの時代に空から降り立った。', x: 550, y: 950 },
+            { type: 'god', name: 'レインボー・サーペント (Rainbow Serpent)', region: 'オーストラリア全域', content: '水と生命の源である巨大な蛇の精霊。', origin: 'ドリーミングの初期に地底から現れ、移動することで川や山を作った。', x: 450, y: 800 },
+            { type: 'god', name: 'ブンジル (Bunjil)', region: 'ビクトリア州', content: '楔尾ワシの姿をした創造神。', origin: '大地がまだ平らだった時代に天空から舞い降りた。', x: 520, y: 1050 },
+            { type: 'god', name: 'アルティラ (Altjira)', region: '中央オーストラリア', content: 'エミューの足を持つ天空の創造神。', origin: 'ドリーミングの以前から存在していた。', x: 420, y: 850 },
+            { type: 'god', name: 'ウォンジナ (Wondjina)', region: '西オーストラリア州（キンバリー地域）', content: '口がなく大きな目を持つ雨と雲の精霊。', origin: '雲から生まれ、世界を作った後に壁画に姿を残した。', x: 300, y: 650 },
+            { type: 'god', name: 'インガララ (Yingarna)', region: 'アーネムランド', content: '人類や言語、動植物を体内から生んだ大蛇の母神。', origin: '太古の水から最初に現れた。', x: 420, y: 580 },
+            { type: 'god', name: 'ダラムルン (Daramulum)', region: 'ニューサウスウェールズ州沿岸部', content: '天候と儀式を司る天空の精霊。', origin: 'バイアメとともに降臨した。', x: 620, y: 960 },
+            { type: 'god', name: 'ドゥワの祖先神 (Dhuwa Ancestors)', region: 'アーネムランド東部', content: '太陽や自然のサイクルを創り出した祖先神。', origin: '東の海から訪れた。', x: 460, y: 560 },
+            { type: 'god', name: 'ヌルゴンゴ (Ngaljod)', region: 'アーネムランド西部', content: '季節の循環と水脈を司る精霊。', origin: '水脈の中から出現した。', x: 400, y: 600 },
+            { type: 'god', name: 'ダーラ (Dhara)', region: 'クイーンズランド州北部', content: '太陽と熱を与える女神。', origin: '暗闇の世界を照らすため地底から昇った。', x: 580, y: 680 },
+
+            // オーストラリア大陸（怪物・精霊）
+            { type: 'monster', name: 'バニップ (Bunyip)', region: 'オーストラリア全域の湿地帯', content: '沼や川に潜み、人を水中に引きずり込む怪物。', origin: '掟を破った者への罰として精霊が生み出した。', x: 480, y: 900 },
+            { type: 'monster', name: 'ヤアラ・マ・ホ・フー (Yara-ma-yha-who)', region: 'ニューサウスウェールズ州内陸部', content: '赤い皮膚と頭を持ち、指の吸盤で血を吸う小柄な怪物。', origin: '聖なる木の実を盗む者を懲らしめるため生み出された。', x: 520, y: 920 },
+            { type: 'monster', name: 'ヤウイー (Yowie)', region: 'オーストラリア東部', content: '全身が毛で覆われた二足歩行の野人。', origin: '不完全な形で取り残された太古の種族。', x: 600, y: 880 },
+            { type: 'monster', name: 'ドガル (Dhoogal)', region: 'クイーンズランド州南部', content: '夜間に子供をさらう影のような悪霊。', origin: '不吉な死を迎えた者の魂が怨念化した。', x: 610, y: 800 },
+            { type: 'monster', name: 'マルジェワンノ (Muldjewangk)', region: '南オーストラリア州（マレー川）', content: '川底に潜み、遊ぶ子供を引きずり込む水妖。', origin: '水資源を乱した部族への罰として生まれた。', x: 460, y: 1000 },
+            { type: 'monster', name: 'ドゥワル (Duwal)', region: 'アーネムランド', content: '尖った歯を持つ森林の肉食怪物。', origin: '掟を破り肉をむさぼった祖先が変化した姿。', x: 430, y: 620 },
+            { type: 'monster', name: 'ミミ (Mimi)', region: 'アーネムランド', content: '岩の隙間に棲む極度に細い精霊。怒らせると人を岩の中に閉じ込める。', origin: '風を避けるため岩の隙間で暮らすようになった古代の存在。', x: 450, y: 640 },
+            { type: 'monster', name: 'キンカ (Quinkin)', region: 'クイーンズランド州北部', content: '洞窟に住み、近づく者を害する怪物。', origin: '大地の裂け目の悪意から発生した。', x: 550, y: 650 },
+            { type: 'monster', name: 'ガンバ (Gamba)', region: '西オーストラリア州', content: '地面に穴を掘り落とし穴を作る地底の怪物。', origin: '大地を不当に掘り返した者を吞み込むため生み出された。', x: 280, y: 820 },
+            { type: 'monster', name: 'ノウイー (Gnowee)', region: '中央オーストラリア', content: '砂嵐を起こして旅人を遭難させる砂漠の悪霊。', origin: '水場を教えずに他者を死なせた者の怨念から生じた。', x: 380, y: 820 }
+        ];
+
+        // マップパン＆ズームコントロール
+        const container = document.getElementById('app-container');
+        const mapCanvas = document.getElementById('map-canvas');
+        const pinsLayer = document.getElementById('pins-layer');
+
+        let isDragging = false;
+        let startX, startY;
+        let translateX = -200;
+        let translateY = -100;
+        let scale = 1;
+
+        function updateTransform() {
+            mapCanvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        }
+
+        container.addEventListener('mousedown', (e) => {
+            if(e.target.closest('.pin')) return;
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform();
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            scale = Math.min(Math.max(0.5, scale * zoomFactor), 2.5);
+            updateTransform();
+        });
+
+        // ピン描画とイベント設定
+        function renderPins() {
+            pinsLayer.innerHTML = '';
+            mythologyData.forEach((item, index) => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', `pin pin-${item.type}`);
+                g.setAttribute('transform', `translate(${item.x}, ${item.y})`);
+                g.setAttribute('data-index', index);
+                g.setAttribute('data-type', item.type);
+
+                // マーカーリング（点滅演出用）
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('r', '8');
+
+                g.appendChild(circle);
+                g.onclick = (e) => {
+                    e.stopPropagation();
+                    openPanel(item);
+                };
+
+                pinsLayer.appendChild(g);
+            });
+        }
+
+        // 詳細パネル表示
+        function openPanel(item) {
+            const panel = document.getElementById('detail-panel');
+            const badge = document.getElementById('detail-type');
+            
+            badge.textContent = item.type === 'god' ? '神様' : '怪物・精霊';
+            badge.className = `badge badge-${item.type}`;
+            
+            document.getElementById('detail-title').textContent = item.name;
+            document.getElementById('detail-region').textContent = item.region;
+            document.getElementById('detail-content').textContent = item.content;
+            document.getElementById('detail-origin').textContent = item.origin;
+
+            panel.classList.add('active');
+        }
+
+        function closePanel() {
+            document.getElementById('detail-panel').classList.remove('active');
+        }
+
+        // フィルター切り替え
+        function filterPins(category) {
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const pins = document.querySelectorAll('.pin');
+            pins.forEach(pin => {
+                const type = pin.getAttribute('data-type');
+                if (category === 'all' || type === category) {
+                    pin.style.display = 'block';
+                } else {
+                    pin.style.display = 'none';
+                }
+            });
+        }
+
+        // 参考文献モーダル
+        function toggleModal(show) {
+            document.getElementById('ref-modal').style.display = show ? 'flex' : 'none';
+        }
+
+        // 初期化
+        renderPins();
+        updateTransform();
+    </script>
+</body>
+</html>
